@@ -1,5 +1,5 @@
 name: "Fadecandy Node Controller"
-version: "0.1.1"
+version: "0.1.2"
 slug: "fadecandy_node"
 description: "Runs a Node.js service that connects to a Fadecandy LED controller over USB on HAOS."
 url: "https://example.com/fadecandy-node-addon"
