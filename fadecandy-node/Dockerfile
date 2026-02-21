@@ -4,11 +4,8 @@ FROM ${BUILD_FROM}
 ENV LANG=C.UTF-8 \
     PATH=/usr/local/bin:/usr/bin:/bin
 
-# Install Node.js, USB libraries, and runtime tools (Debian-based HA base image)
-RUN apt-get update \
-    && apt-get install -y --no-install-recommends \
-       nodejs npm libusb-1.0-0 udev tzdata ca-certificates \
-    && rm -rf /var/lib/apt/lists/*
+# Install Node.js, USB libraries, and runtime tools (Alpine-based HA add-on base)
+RUN apk add --no-cache nodejs npm libusb eudev tzdata
 
 WORKDIR /usr/src/app
 
