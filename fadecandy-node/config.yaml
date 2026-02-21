@@ -1,0 +1,37 @@
+name: "Fadecandy Node Controller"
+version: "0.1.0"
+slug: "fadecandy_node"
+description: "Runs a Node.js service that connects to a Fadecandy LED controller over USB on HAOS."
+url: "https://example.com/fadecandy-node-addon"
+arch:
+  - aarch64
+  - armv7
+  - armhf
+  - amd64
+  - i386
+startup: services
+boot: auto
+init: false
+usb: true
+privileged:
+  - SYS_RAWIO
+  - SYS_ADMIN
+devices:
+  - "/dev/bus/usb:/dev/bus/usb:rwm"
+map:
+  - config:rw
+environment:
+  NODE_ENV: production
+options:
+  log_level: info
+schema:
+  log_level: list(debug|info|warn|error)
+ports:
+  7890/tcp: 7890
+image: "local/fadecandy-node-{arch}"
+build_from:
+  aarch64: "ghcr.io/home-assistant/aarch64-base:3.19"
+  armv7: "ghcr.io/home-assistant/armv7-base:3.19"
+  armhf: "ghcr.io/home-assistant/armhf-base:3.19"
+  amd64: "ghcr.io/home-assistant/amd64-base:3.19"
+  i386: "ghcr.io/home-assistant/i386-base:3.19"

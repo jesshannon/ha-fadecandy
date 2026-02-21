@@ -1,0 +1,5 @@
+#!/usr/bin/with-contenv sh
+# Ensure USB bus is reachable (useful when privileged/devices mapping is present)
+if [ -d /dev/bus/usb ]; then
+  chmod -R a+rw /dev/bus/usb 2>/dev/null || true
+fi

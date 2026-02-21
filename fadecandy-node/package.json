@@ -1,0 +1,16 @@
+{
+  "name": "fadecandy-node-addon",
+  "version": "0.1.0",
+  "description": "Home Assistant add-on service for controlling a Fadecandy LED controller over USB.",
+  "main": "src/index.js",
+  "license": "MIT",
+  "type": "module",
+  "scripts": {
+    "start": "node src/index.js"
+  },
+  "dependencies": {
+    "express": "^4.19.2",
+    "usb": "^2.14.0",
+    "winston": "^3.11.0"
+  }
+}
