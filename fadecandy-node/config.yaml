@@ -1,5 +1,5 @@
 name: "Fadecandy Node Controller"
-version: "0.1.0"
+version: "0.1.1"
 slug: "fadecandy_node"
 description: "Runs a Node.js service that connects to a Fadecandy LED controller over USB on HAOS."
 url: "https://example.com/fadecandy-node-addon"
@@ -28,7 +28,6 @@ schema:
   log_level: list(debug|info|warn|error)
 ports:
   7890/tcp: 7890
-image: "local/fadecandy-node-{arch}"
 build_from:
   aarch64: "ghcr.io/home-assistant/aarch64-base:3.19"
   armv7: "ghcr.io/home-assistant/armv7-base:3.19"

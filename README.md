@@ -17,8 +17,9 @@ Minimal Home Assistant add-on that runs a Node.js service to discover and talk t
 ## Usage (local add-on)
 1) Copy/clone this repo onto your Home Assistant host (e.g., under `/addons/fadecandy-node`).
 2) In Home Assistant: **Settings → Add-ons → Add-on Store → ⋮ → Repositories → Add** and enter the local path/URL for this repo.
-3) Open the "Fadecandy Node Controller" add-on, set `log_level` if desired, and click **Install** then **Start**.
-4) Check logs for "Fadecandy detected" lines. The `/usb` endpoint reports visible USB devices.
+3) On first install choose **Build** (not pull) so Supervisor builds the image locally. If you see a pull error for `local/fadecandy-node-<arch>`, hit the kebab menu → **Rebuild**.
+4) Open the "Fadecandy Node Controller" add-on, set `log_level` if desired, and click **Start**.
+5) Check logs for "Fadecandy detected" lines. The `/usb` endpoint reports visible USB devices.
 
 ## Notes
 - Container runs privileged and maps `/dev/bus/usb`; adjust if your supervisor requires explicit device mapping.
