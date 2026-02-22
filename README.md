@@ -3,7 +3,7 @@
 Minimal Home Assistant add-on that runs a Node.js service to discover and talk to a Fadecandy LED controller over USB. Built for HAOS on Raspberry Pi where USB passthrough requires a privileged container.
 
 ## Features
-- Node.js runtime with `usb` library and health endpoint on port 7890
+- Node.js runtime with `usb` library and health endpoint on port 7892
 - Privileged container with `/dev/bus/usb` mapped for direct Fadecandy access
 - Periodic USB scan logging to confirm the board is detected
 
