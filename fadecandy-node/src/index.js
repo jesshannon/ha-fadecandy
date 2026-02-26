@@ -1,58 +1,65 @@
-import usb from 'usb';
-import express from 'express';
 import winston from 'winston';
+import FadeCandyManager from './fadecandy/FadeCandyManager.js';
+import HomeAssistantBridge from './ha/HomeAssistantBridge.js';
+import MonitorServer from './server/MonitorServer.js';
+import { logFadecandyStatus } from './usbUtils.js';
 
 const logger = winston.createLogger({
-  level: process.env.LOG_LEVEL || 'info',
+  level: process.env.LOG_LEVEL || 'debug',
   format: winston.format.combine(
     winston.format.timestamp(),
-    winston.format.printf(({ level, message, timestamp }) => `${timestamp} [${level}] ${message}`)
+    winston.format.printf(({ level, message, timestamp }) => `${timestamp} [${level}] ${message}`),
   ),
-  transports: [new winston.transports.Console()]
+  transports: [new winston.transports.Console()],
 });
 
-const FADECANDY_VENDOR_ID = 0x1d50;
-const FADECANDY_PRODUCT_ID = 0x607a;
+// Default to 7890 to match add-on port mapping in config.yaml
+const PORT = Number(process.env.PORT || 7890);
+let manager;
 
-const app = express();
-const PORT = process.env.PORT || 7890;
-
-app.get('/health', (_req, res) => {
-  res.json({ status: 'ok', timestamp: new Date().toISOString() });
+// Log exit/crash reasons to understand restarts under HA Supervisor
+process.on('exit', (code) => logger.warn(`Process exiting with code ${code}`));
+process.on('uncaughtException', (err) => {
+  logger.error(`Uncaught exception: ${err.stack || err.message || err}`);
+  setTimeout(() => process.exit(1), 50); // allow log flush then crash so supervisor can restart
 });
 
-app.get('/usb', (_req, res) => {
-  res.json({ devices: listUsb() });
+process.on('unhandledRejection', (reason) => {
+  logger.error(`Unhandled rejection: ${reason && reason.stack ? reason.stack : reason}`);
+  setTimeout(() => process.exit(1), 50);
 });
 
-function listUsb() {
-  return usb.getDeviceList().map((device) => {
-    const { idVendor, idProduct } = device.deviceDescriptor || {};
-    return {
-      vendorId: idVendor,
-      productId: idProduct,
-      fadecandy: idVendor === FADECANDY_VENDOR_ID && idProduct === FADECANDY_PRODUCT_ID
-    };
-  });
-}
+['SIGTERM', 'SIGINT'].forEach((sig) =>
+  process.on(sig, () => {
+    logger.warn(`Received ${sig}, shutting down`);
+    manager?.stopAnimation();
+    manager?.clear();
+    process.exit(0);
+  }),
+);
 
-function logFadecandyStatus() {
-  const matches = listUsb().filter((d) => d.fadecandy);
-  if (matches.length === 0) {
-    logger.warn('Fadecandy not detected on USB bus');
-  } else {
-    matches.forEach((device, idx) => {
-      logger.info(`Fadecandy detected (index ${idx}) VID:PID ${device.vendorId.toString(16)}:${device.productId.toString(16)}`);
-    });
-  }
-}
-
-function main() {
+async function main() {
   logger.info('Starting Fadecandy Node add-on service');
-  logFadecandyStatus();
-  setInterval(logFadecandyStatus, 30000);
 
-  app.listen(PORT, () => logger.info(`Health/USB endpoint listening on :${PORT}`));
+  manager = new FadeCandyManager({ logger });
+  const haBridge = new HomeAssistantBridge({ manager, logger });
+  const monitor = new MonitorServer({ port: PORT, manager, haBridge, logger });
+
+  logFadecandyStatus(logger);
+  setInterval(() => logFadecandyStatus(logger), 30000);
+
+  try {
+    await monitor.start();
+  } catch (err) {
+    logger.error(`Unable to start monitor server: ${err.message}`);
+    setTimeout(() => process.exit(1), 50);
+  }
+
+  try {
+    await manager.waitUntilReady(8000);
+  } catch (err) {
+    logger.warn(`Fadecandy not ready yet: ${err.message}`);
+  }
 }
 
 main();

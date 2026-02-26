@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>FadeCandy Bookshelf Lab</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="background-accent"></div>
+  <header>
+    <div>
+      <h1>LED Bookshelf</h1>
+    </div>
+    <div class="pill ready" id="status-pill">Ready?</div>
+  </header>
+
+  <section class="panel">
+    <div class="controls">
+      <div>
+        <label class="label">Preset animation</label>
+        <div class="control-row">
+          <select id="animation-select"></select>
+          <button id="run-animation">Run</button>
+          <button id="stop-animation" class="ghost">Stop</button>
+        </div>
+      </div>
+      <div class="control-row">
+        <button id="all-off" class="ghost">All Off</button>
+        <button id="refresh-state" class="ghost">Refresh</button>
+      </div>
+    </div>
+  </section>
+
+  <section class="panel shelves">
+    <div class="panel-head">
+      <p class="label">Bookshelf simulator</p>
+      <p class="subtle" id="last-sync">Syncing…</p>
+    </div>
+    <div class="canvas-wrap">
+      <canvas id="shelf-canvas"></canvas>
+    </div>
+    <div id="shelf-grid" class="shelf-grid"></div>
+  </section>
+
+  <div id="toast" class="toast hidden"></div>
+
+  <script src="app.js"></script>
+</body>
+</html>

@@ -1,0 +1,8 @@
+
+[ 1024.820160] usb 1-1.1: new full-speed USB device number 4 using xhci_hcd
+[ 1024.927192] usb 1-1.1: New USB device found, idVendor=1d50, idProduct=607a, bcdDevice= 1.07
+[ 1024.927225] usb 1-1.1: New USB device strings: Mfr=1, Product=2, SerialNumber=3
+[ 1024.927238] usb 1-1.1: Product: Fadecandy
+[ 1024.927250] usb 1-1.1: Manufacturer: scanlime
+[ 1024.927260] usb 1-1.1: SerialNumber: TFYNNXYYSCNETPOR
+
