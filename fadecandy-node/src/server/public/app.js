@@ -11,6 +11,10 @@ const lastSync = document.getElementById('last-sync');
 const toastEl = document.getElementById('toast');
 const canvas = document.getElementById('shelf-canvas');
 const ctx = canvas.getContext('2d');
+const colorPicker = document.getElementById('color-picker');
+const brushPreview = document.getElementById('brush-preview');
+const recentColoursElement = document.getElementById('recent-colors');
+
 
 const clientState = {
   ready: false,
@@ -20,6 +24,12 @@ const clientState = {
 };
 
 let socket;
+let brushColor = { r: 70, g: 194, b: 166 };
+let painting = false;
+let shelfRects = [];
+let lastPaint = { key: null, hex: null };
+
+let recentColours = ["#000000","#ffffff","#ff0000","#0000ff","#f200ff"];
 
 async function fetchJson(url, options) {
   const res = await fetch(url, options);
@@ -75,14 +85,11 @@ function updateLastSync(text = '') {
 function renderAnimations(animations) {
   const existingOptions = Array.from(animationSelect.options);
   const existingMap = new Map();
-  existingOptions.forEach(opt => {
-    existingMap.set(opt.value, opt);
-  });
-  const incomingSet = new Set(animations);
-  animations.forEach(name => {
+  existingOptions.forEach((opt) => existingMap.set(opt.value, opt));
+
+  animations.forEach((name) => {
     let opt = existingMap.get(name);
     if (!opt) {
-      // Create new option if it doesn't exist
       opt = document.createElement('option');
       opt.value = name;
       opt.textContent = name;
@@ -91,16 +98,15 @@ function renderAnimations(animations) {
     opt.selected = name === clientState.currentAnimation;
     existingMap.delete(name);
   });
-  existingMap.forEach(opt => {
-    animationSelect.removeChild(opt);
-  });
+
+  existingMap.forEach((opt) => animationSelect.removeChild(opt));
   animationSelect.disabled = animations.length === 0;
 }
-
 
 function drawShelvesCanvas(shelves) {
   if (!shelves || !shelves.length) {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
+    shelfRects = [];
     return;
   }
   const dpr = window.devicePixelRatio || 1;
@@ -122,33 +128,44 @@ function drawShelvesCanvas(shelves) {
   ctx.clearRect(0, 0, width, height);
 
   ctx.fillStyle = '#0b1221';
-  roundedRectPath(ctx, padding - 12, padding - 16, width - padding * 2 + 24, height - padding * 2 + 32, 2);
+  roundedRectPath(
+    ctx,
+    padding - 12,
+    padding - 16,
+    width - padding * 2 + 24,
+    height - padding * 2 + 32,
+    2,
+  );
   ctx.fill();
 
+  const rects = [];
   shelves.forEach((shelf) => {
     const x = padding + shelf.columnIndex * (colWidth + gutter);
     const y = padding + shelf.shelfIndex * (shelfHeight + shelfGap);
     const sides = shelf.sides?.length ? shelf.sides : [shelf.color];
-    const sideWidth = (colWidth - 10);
+    const sideWidth = colWidth - 10;
 
     sides.forEach((sideColor, idx) => {
-
-      const gradient = ctx.createLinearGradient(x, 0, x + sideWidth, 0);    
-       
-      gradient.addColorStop(idx%2 ? 0 : 0.9,rgbToHex(sideColor));
-      gradient.addColorStop(idx%2 ? 0.9 : 0,"transparent");
-
+      const gradient = ctx.createLinearGradient(x, 0, x + sideWidth, 0);
+      gradient.addColorStop(idx % 2 ? 0.9 : 0, rgbToHex(sideColor));
+      gradient.addColorStop(idx % 2 ? 0 : 0.9, 'transparent');
       ctx.fillStyle = gradient;
-
-      roundedRectPath(ctx, 
-          x,
-          y,
-          sideWidth,
-          shelfHeight,
-          0);
+      roundedRectPath(ctx, x, y, sideWidth, shelfHeight, 0);
       ctx.fill();
+
+      rects.push({
+        columnIndex: shelf.columnIndex,
+        shelfIndex: shelf.shelfIndex,
+        side: idx,
+        x: x + (sideWidth * idx / 2),
+        y,
+        width: sideWidth/2,
+        height: shelfHeight,
+      });
+
     });
   });
+  shelfRects = rects;
 }
 
 function applyState(next) {
@@ -228,16 +245,16 @@ function connectSocket() {
   socket.addEventListener('message', (event) => {
     try {
       const msg = JSON.parse(event.data);
-      if (msg.type === 'state' && msg.data) 
+      if (msg.type === 'state' && msg.data)
         applyState(msg.data);
       if (msg.type === 'shelf' && msg.shelf) {
         upsertShelf(msg.shelf);
         updateLastSync('Live via WebSocket');
       }
-      if (msg.type === 'animation') {
+      if (msg.type === 'animation') 
         clientState.currentAnimation = msg.name || null;
-      }
-      if (msg.type === 'ready' && 'ready' in msg) updateStatus(msg.ready);
+      if (msg.type === 'ready' && 'ready' in msg) 
+        updateStatus(msg.ready);
     } catch (err) {
       console.warn('WS message parse failed', err);
     }
@@ -258,10 +275,131 @@ function showToast(message, duration = 2200) {
   showToast.timer = setTimeout(() => toastEl.classList.add('hidden'), duration);
 }
 
+function updateBrushUI(hex) {
+  if (!hex) return;
+  brushPreview.style.background = hex;
+
+  if(recentColours.indexOf(hex)>-0)
+    return;
+
+  recentColours.push(hex);
+  recentColoursElement.innerHTML = '';  
+  recentColours.forEach(c => {
+    var d = document.createElement('div');
+    d.classList.add('recent-colour');
+    d.style.backgroundColor = c;
+    d.addEventListener('click',()=>setBrushColor(c));
+    recentColoursElement.appendChild(d);
+  });
+}
+
+function setBrushColor(hex) {
+  brushColor = hexToRgb(hex);
+  updateBrushUI(hex);
+  lastPaint = { key: null, hex: null };
+}
+
+function setBrushFromPicker() {
+  const hex = colorPicker.value || '#46c2a6';
+  setBrushColor(hex);
+}
+
+function shelfAtPoint(clientX, clientY) {
+  if (!shelfRects.length) return null;
+  const bounds = canvas.getBoundingClientRect();
+  const x = clientX - bounds.left;
+  const y = clientY - bounds.top;
+  return shelfRects.find(
+    (rect) =>
+      x >= rect.x &&
+      x <= rect.x + rect.width &&
+      y >= rect.y &&
+      y <= rect.y + rect.height,
+  );
+}
+
+async function paintShelfAtEvent(evt) {
+  const point = 'touches' in evt ? evt.touches[0] : evt;
+  const shelfRect = shelfAtPoint(point.clientX, point.clientY);
+  if (!shelfRect) return;
+
+  const brushHex = colorPicker.value || '#46c2a6';
+  const key = `${shelfRect.columnIndex}:${shelfRect.shelfIndex}:${shelfRect.side}`;
+  if (lastPaint.key === key && lastPaint.hex === brushHex) return;
+
+  try {
+    if (clientState.currentAnimation) await stopAnimation();
+    await fetchJson(`/api/shelves/${shelfRect.columnIndex}/${shelfRect.shelfIndex}/side/${shelfRect.side==0?'left':'right'}/color`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(brushColor),
+    });
+
+    const existing = clientState.shelves.find(
+      (s) => s.columnIndex === shelfRect.columnIndex && s.shelfIndex === shelfRect.shelfIndex,
+    );
+    // const sides = existing?.sides?.length ? existing.sides.map(() => brushColor) : undefined;
+    // upsertShelf({
+    //   columnIndex: shelfRect.columnIndex,
+    //   shelfIndex: shelfRect.shelfIndex,
+    //   color: brushColor,
+    //   ...(sides ? { sides } : {}),
+    // });
+    lastPaint = { key, hex: brushHex };
+  } catch (err) {
+    showToast(`Paint failed: ${err.message}`);
+  }
+}
+
+function handleMouseDown(evt) {
+  painting = true;
+  paintShelfAtEvent(evt);
+}
+
+function handleMouseMove(evt) {
+  if (!painting) return;
+  paintShelfAtEvent(evt);
+}
+
+function stopPainting() {
+  painting = false;
+}
+
 runAnimationBtn.addEventListener('click', runAnimation);
 stopAnimationBtn.addEventListener('click', stopAnimation);
 allOffBtn.addEventListener('click', allOff);
 refreshBtn.addEventListener('click', refreshState);
+
+if (colorPicker) {
+  colorPicker.addEventListener('change', setBrushFromPicker);
+  setBrushFromPicker();
+}
+
+canvas.addEventListener('mousedown', handleMouseDown);
+canvas.addEventListener('mousemove', handleMouseMove);
+canvas.addEventListener('mouseup', stopPainting);
+canvas.addEventListener('mouseleave', stopPainting);
+
+canvas.addEventListener(
+  'touchstart',
+  (evt) => {
+    evt.preventDefault();
+    painting = true;
+    paintShelfAtEvent(evt);
+  },
+  { passive: false },
+);
+
+canvas.addEventListener(
+  'touchmove',
+  (evt) => {
+    evt.preventDefault();
+    handleMouseMove(evt);
+  },
+  { passive: false },
+);
+
+canvas.addEventListener('touchend', stopPainting, { passive: false });
 
 refreshState();
 connectSocket();

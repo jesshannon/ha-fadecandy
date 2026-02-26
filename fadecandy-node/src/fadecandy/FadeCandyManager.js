@@ -72,16 +72,17 @@ export default class FadeCandyManager extends EventEmitter {
   }
 
   listShelves() {
-    return listShelves(this.mapping).map((entry) => this.#buildShelfSnapshot(entry.columnIndex, entry.shelfIndex));
+    return listShelves(this.mapping).map((entry) =>
+      this.#buildShelfSnapshot(entry.columnIndex, entry.shelfIndex),
+    );
   }
 
   clear({ skipSend = false } = {}) {
     this.frame.fill(0);
-    Object.keys(this.shelfState)
-      .forEach((key) => {
-        const sides = this.shelfState[key]?.sides || [];
-        this.shelfState[key] = { sides: sides.map(() => ({ r: 0, g: 0, b: 0 })) };
-      });
+    Object.keys(this.shelfState).forEach((key) => {
+      const sides = this.shelfState[key]?.sides || [];
+      this.shelfState[key] = { sides: sides.map(() => ({ r: 0, g: 0, b: 0 })) };
+    });
     if (!skipSend) this.pushFrame();
     this.emit('state:update', this.listShelves());
   }
@@ -115,7 +116,7 @@ export default class FadeCandyManager extends EventEmitter {
   setAllShelves(color, { flush = true, notify = true } = {}) {
     const rgb = normalizeColor(color);
     listShelves(this.mapping).forEach(({ columnIndex, shelfIndex }) => {
-      this.setShelfColor(columnIndex, shelfIndex, rgb, { flush: false, notify: true });
+      this.setShelfColor(columnIndex, shelfIndex, rgb, { flush: false, notify: false });
     });
     if (flush) this.pushFrame();
     if (notify) this.emit('state:update', this.listShelves());
@@ -126,7 +127,6 @@ export default class FadeCandyManager extends EventEmitter {
       this.logger?.debug?.('Skipping pushFrame: device not ready');
       return false;
     }
-    //this.logger?.debug?.('Sending frame: ' + JSON.stringify(this.frame));
     this.fadeCandy.send(this.frame);
     return true;
   }
@@ -144,8 +144,6 @@ export default class FadeCandyManager extends EventEmitter {
     if (this.animationStop) {
       this.animationStop();
       this.animationStop = undefined;
-      this.currentAnimation = null;
-      this.emit('animation:stop');
       this.logger?.info?.('Stopped running animation');
     }
   }
@@ -155,10 +153,61 @@ export default class FadeCandyManager extends EventEmitter {
     if (!animation) throw new Error(`Unknown animation "${name}"`);
     this.stopAnimation();
     this.animationStop = animation(options);
-    this.currentAnimation = name;
-    this.emit('animation:start', name);
     this.logger?.info?.(`Started animation "${name}"`);
     return name;
+  }
+
+  #buildDefaultAnimations() {
+    const withFrameRate = (fn, interval = DEFAULT_FRAME_RATE_MS) => {
+      const timer = setInterval(fn, interval);
+      return () => clearInterval(timer);
+    };
+
+    return {
+      breathe: ({ color = { r: 40, g: 120, b: 255 }, durationMs = 2400 } = {}) => {
+        let t = 0;
+        return withFrameRate(() => {
+          const phase = (Math.sin((2 * Math.PI * t) / durationMs) + 1) / 2;
+          const next = {
+            r: Math.round(color.r * phase),
+            g: Math.round(color.g * phase),
+            b: Math.round(color.b * phase),
+          };
+          this.setAllShelves(next);
+          t += DEFAULT_FRAME_RATE_MS;
+        });
+      },
+      rainbowColumns: ({ speed = 120 } = {}) => {
+        let hue = 0;
+        const columnCount = this.mapping.length;
+        const shelvesPerColumn = this.mapping[0]?.length || 0;
+        return withFrameRate(() => {
+          for (let col = 0; col < columnCount; col += 1) {
+            const offsetHue = (hue + col * 40) % 360;
+            const rgb = hsvToRgb(offsetHue, 1, 1);
+            for (let shelf = 0; shelf < shelvesPerColumn; shelf += 1) {
+              this.setShelfColor(col, shelf, rgb, { flush: false });
+            }
+          }
+          this.pushFrame();
+          hue = (hue + speed / 10) % 360;
+        }, DEFAULT_FRAME_RATE_MS);
+      },
+      sparkle: ({ density = 0.08, base = { r: 5, g: 5, b: 5 } } = {}) => {
+        return withFrameRate(() => {
+          // Start from a dim base
+          this.frame.fill(0);
+          this.setAllShelves(base, { flush: false, notify: false });
+          const pixelTotal = this.pixelCount;
+          const sparkles = Math.max(1, Math.floor(pixelTotal * density));
+          for (let i = 0; i < sparkles; i += 1) {
+            const idx = Math.floor(Math.random() * pixelTotal);
+            this.#setRangeColor(idx, idx, { r: 255, g: 255, b: 255 });
+          }
+          this.pushFrame();
+        }, 80);
+      },
+    };
   }
 
   #buildShelfSnapshot(columnIndex, shelfIndex) {
@@ -190,59 +239,6 @@ export default class FadeCandyManager extends EventEmitter {
       r: Math.round(totals.r / sides.length),
       g: Math.round(totals.g / sides.length),
       b: Math.round(totals.b / sides.length),
-    };
-  }
-
-  #buildDefaultAnimations() {
-    const withFrameRate = (fn, interval = DEFAULT_FRAME_RATE_MS) => {
-      const timer = setInterval(fn, interval);
-      return () => clearInterval(timer);
-    };
-
-    return {
-      breathe: ({ color = { r: 40, g: 120, b: 155 }, durationMs = 8000 } = {}) => {
-        let t = 0;
-        return withFrameRate(() => {
-          const phase = (Math.sin((2 * Math.PI * t) / durationMs) + 1) / 2;
-          const next = {
-            r: Math.round(color.r * phase),
-            g: Math.round(color.g * phase),
-            b: Math.round(color.b * phase),
-          };
-          this.setAllShelves(next, { notify: true });
-          t += DEFAULT_FRAME_RATE_MS;
-        });
-      },
-      rainbowColumns: ({ speed = 120 } = {}) => {
-        let hue = 0;
-        const columnCount = this.mapping.length;
-        const shelvesPerColumn = this.mapping[0]?.length || 0;
-        return withFrameRate(() => {
-          for (let col = 0; col < columnCount; col += 1) {
-            const offsetHue = (hue + col * 40) % 360;
-            const rgb = hsvToRgb(offsetHue, 1, 1);
-            for (let shelf = 0; shelf < shelvesPerColumn; shelf += 1) {
-              this.setShelfColor(col, shelf, rgb, { flush: false, notify: true });
-            }
-          }
-          this.pushFrame();
-          hue = (hue + speed / 10) % 360;
-        }, DEFAULT_FRAME_RATE_MS);
-      },
-      sparkle: ({ density = 0.08, base = { r: 5, g: 5, b: 5 } } = {}) => {
-        return withFrameRate(() => {
-          // Start from a dim base
-          this.frame.fill(0);
-          this.setAllShelves(base, { flush: false, notify: false });
-          const pixelTotal = this.pixelCount;
-          const sparkles = Math.max(1, Math.floor(pixelTotal * density));
-          for (let i = 0; i < sparkles; i += 1) {
-            const idx = Math.floor(Math.random() * pixelTotal);
-            this.#setRangeColor(idx, idx, { r: 255, g: 255, b: 255 });
-          }
-          this.pushFrame();
-        }, 80);
-      },
     };
   }
 }

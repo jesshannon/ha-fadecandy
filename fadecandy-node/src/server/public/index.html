@@ -46,6 +46,22 @@
     <div id="shelf-grid" class="shelf-grid"></div>
   </section>
 
+  <section class="panel painter-panel">
+    <div class="panel-head">
+      <p class="label">Paint shelves</p>
+      <p class="subtle">Choose a color, and paint</p>
+    </div>
+    <div class="paint-controls">
+      <div class="current-color">
+        <div id="brush-preview" aria-hidden="true"></div>
+      </div>
+      <div id="recent-colors">
+        <div class="recent-colour" aria-hidden="true"></div>
+      </div>
+      <input type="color" id="color-picker" value="#46c2a6" aria-label="Select paint color" />
+    </div>
+  </section>
+
   <div id="toast" class="toast hidden"></div>
 
   <script src="app.js"></script>
