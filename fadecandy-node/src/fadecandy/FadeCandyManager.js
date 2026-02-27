@@ -1,8 +1,7 @@
 import { EventEmitter } from 'events';
 import FadeCandy from '../fa/FadeCandy.js';
 import { BOOKSHELF_MAP, getShelfRanges, listShelves, maxPixelIndex } from '../config/bookshelfMap.js';
-
-const DEFAULT_FRAME_RATE_MS = 50; // 20 FPS for testing/animation
+import buildModes from './modes/index.js';
 
 function clampColor(value) {
   const v = Number.isFinite(value) ? value : 0;
@@ -39,9 +38,9 @@ export default class FadeCandyManager extends EventEmitter {
 
     this.fadeCandy = new FadeCandy();
     this.ready = false;
-    this.currentAnimation = null;
-    this.animations = this.#buildDefaultAnimations();
-    this.stopAnimation = this.stopAnimation.bind(this);
+    this.currentMode = null;
+    this.modes = buildModes(this);
+    this.stopMode = this.stopMode.bind(this);
 
     this.fadeCandy.on(FadeCandy.events.READY, (fc) => {
       this.logger?.info?.('Fadecandy interface ready');
@@ -67,8 +66,8 @@ export default class FadeCandyManager extends EventEmitter {
     });
   }
 
-  listAnimations() {
-    return Object.keys(this.animations);
+  listModes() {
+    return Object.values(this.modes).map(({ id, name }) => ({ id, name }));
   }
 
   listShelves() {
@@ -140,74 +139,33 @@ export default class FadeCandyManager extends EventEmitter {
     }
   }
 
-  stopAnimation() {
-    if (this.animationStop) {
-      this.animationStop();
-      this.animationStop = undefined;
-      this.logger?.info?.('Stopped running animation');
+  stopMode() {
+    const hadStopper = typeof this.modeStop === 'function';
+    if (hadStopper) this.modeStop();
+    this.modeStop = undefined;
+    const wasRunning = this.currentMode;
+    this.currentMode = null;
+    this.clear();
+    if (hadStopper || wasRunning) {
+      this.logger?.info?.('Stopped running mode');
+      this.emit('mode:stop', null);
     }
   }
 
-  runAnimation(name, options = {}) {
-    const animation = this.animations[name];
-    if (!animation) throw new Error(`Unknown animation "${name}"`);
-    this.stopAnimation();
-    this.animationStop = animation(options);
-    this.logger?.info?.(`Started animation "${name}"`);
+  runMode(name, options = {}) {
+    const mode = this.modes[name];
+    if (!mode) throw new Error(`Unknown mode "${name}"`);
+    if(this.currentMode != null)
+      this.stopMode();
+    else
+      this.clear();
+    
+    const maybeStop = mode.start(options);
+    this.modeStop = typeof maybeStop === 'function' ? maybeStop : undefined;
+    this.currentMode = name;
+    this.logger?.info?.(`Started mode "${name}"`);
+    this.emit('mode:start', name);
     return name;
-  }
-
-  #buildDefaultAnimations() {
-    const withFrameRate = (fn, interval = DEFAULT_FRAME_RATE_MS) => {
-      const timer = setInterval(fn, interval);
-      return () => clearInterval(timer);
-    };
-
-    return {
-      breathe: ({ color = { r: 40, g: 120, b: 255 }, durationMs = 2400 } = {}) => {
-        let t = 0;
-        return withFrameRate(() => {
-          const phase = (Math.sin((2 * Math.PI * t) / durationMs) + 1) / 2;
-          const next = {
-            r: Math.round(color.r * phase),
-            g: Math.round(color.g * phase),
-            b: Math.round(color.b * phase),
-          };
-          this.setAllShelves(next);
-          t += DEFAULT_FRAME_RATE_MS;
-        });
-      },
-      rainbowColumns: ({ speed = 120 } = {}) => {
-        let hue = 0;
-        const columnCount = this.mapping.length;
-        const shelvesPerColumn = this.mapping[0]?.length || 0;
-        return withFrameRate(() => {
-          for (let col = 0; col < columnCount; col += 1) {
-            const offsetHue = (hue + col * 40) % 360;
-            const rgb = hsvToRgb(offsetHue, 1, 1);
-            for (let shelf = 0; shelf < shelvesPerColumn; shelf += 1) {
-              this.setShelfColor(col, shelf, rgb, { flush: false });
-            }
-          }
-          this.pushFrame();
-          hue = (hue + speed / 10) % 360;
-        }, DEFAULT_FRAME_RATE_MS);
-      },
-      sparkle: ({ density = 0.08, base = { r: 5, g: 5, b: 5 } } = {}) => {
-        return withFrameRate(() => {
-          // Start from a dim base
-          this.frame.fill(0);
-          this.setAllShelves(base, { flush: false, notify: false });
-          const pixelTotal = this.pixelCount;
-          const sparkles = Math.max(1, Math.floor(pixelTotal * density));
-          for (let i = 0; i < sparkles; i += 1) {
-            const idx = Math.floor(Math.random() * pixelTotal);
-            this.#setRangeColor(idx, idx, { r: 255, g: 255, b: 255 });
-          }
-          this.pushFrame();
-        }, 80);
-      },
-    };
   }
 
   #buildShelfSnapshot(columnIndex, shelfIndex) {
@@ -241,24 +199,4 @@ export default class FadeCandyManager extends EventEmitter {
       b: Math.round(totals.b / sides.length),
     };
   }
-}
-
-function hsvToRgb(h, s, v) {
-  const c = v * s;
-  const x = c * (1 - Math.abs(((h / 60) % 2) - 1));
-  const m = v - c;
-  let [r1, g1, b1] = [0, 0, 0];
-
-  if (h >= 0 && h < 60) [r1, g1, b1] = [c, x, 0];
-  else if (h < 120) [r1, g1, b1] = [x, c, 0];
-  else if (h < 180) [r1, g1, b1] = [0, c, x];
-  else if (h < 240) [r1, g1, b1] = [0, x, c];
-  else if (h < 300) [r1, g1, b1] = [x, 0, c];
-  else [r1, g1, b1] = [c, 0, x];
-
-  return {
-    r: Math.round((r1 + m) * 255),
-    g: Math.round((g1 + m) * 255),
-    b: Math.round((b1 + m) * 255),
-  };
 }

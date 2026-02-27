@@ -26,7 +26,7 @@ export default class HomeAssistantBridge {
       const shelf = Number(req.params.shelf);
       const { r, g, b } = req.body || {};
       try {
-        this.manager.stopAnimation();
+        if(this.manager.currentMode != null) this.stopMode();
         this.manager.setShelfColor(column, shelf, { r, g, b });
         res.json({ ok: true, column, shelf, color: { r, g, b } });
       } catch (err) {
@@ -35,23 +35,23 @@ export default class HomeAssistantBridge {
       }
     });
 
-    this.router.post('/animations/:name', (req, res) => {
+    this.router.post('/modes/start/:name', (req, res) => {
       const { name } = req.params;
       try {
-        this.manager.runAnimation(name, req.body || {});
-        res.json({ ok: true, animation: name });
+        this.manager.runMode(name, req.body || {});
+        res.json({ ok: true, mode: name });
       } catch (err) {
         res.status(400).json({ ok: false, error: err.message });
       }
     });
 
-    this.router.post('/animations/:name/stop', (_req, res) => {
-      this.manager.stopAnimation();
-      res.json({ ok: true, animation: null });
+    this.router.post('/modes/stop', (_req, res) => {
+      this.manager.stopMode();
+      res.json({ ok: true, mode: null });
     });
 
     this.router.post('/off', (_req, res) => {
-      this.manager.stopAnimation();
+      this.manager.stopMode();
       this.manager.clear();
       res.json({ ok: true });
     });
@@ -63,18 +63,20 @@ export default class HomeAssistantBridge {
       name: `Bookshelf ${columnIndex + 1} / Shelf ${shelfIndex + 1}`,
       column: columnIndex,
       shelf: shelfIndex,
-      color,
+      color: this.manager.currentMode == null ? color : { r:0, g:0, b:0 },
       type: 'light',
     }));
 
-    const animations = this.manager.listAnimations().map((name) => ({
-      id: `animation_${name}`,
-      name: `Animation ${name}`,
+    const modes = this.manager.listModes();
+    const options = modes.map(mode => ({ id: mode.id, name: mode.name }));
+    const mode = {
+      id: 'mode_select',
+      name: 'Mode',
       type: 'select',
-      options: [],
-      value: name,
-    }));
+      options,
+      value: this.manager.currentMode || null,
+    };
 
-    return { shelves, animations };
+    return { shelves, mode };
   }
 }

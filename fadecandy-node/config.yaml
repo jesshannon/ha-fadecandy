@@ -30,3 +30,4 @@ ports:
   7890/tcp: null
 ports_description:
   7890/tcp: Test
+homeassistant_api: true

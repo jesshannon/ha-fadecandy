@@ -1,9 +1,9 @@
 const stateUrl = '/api/state';
 const wsUrl = `${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/ws`;
 
-const animationSelect = document.getElementById('animation-select');
-const runAnimationBtn = document.getElementById('run-animation');
-const stopAnimationBtn = document.getElementById('stop-animation');
+const modeSelect = document.getElementById('mode-select');
+const runModeBtn = document.getElementById('run-mode');
+const stopModeBtn = document.getElementById('stop-mode');
 const allOffBtn = document.getElementById('all-off');
 const refreshBtn = document.getElementById('refresh-state');
 const statusPill = document.getElementById('status-pill');
@@ -18,9 +18,9 @@ const recentColoursElement = document.getElementById('recent-colors');
 
 const clientState = {
   ready: false,
-  animations: [],
+  modes: [],
   shelves: [],
-  currentAnimation: null,
+  currentMode: null,
 };
 
 let socket;
@@ -82,25 +82,25 @@ function updateLastSync(text = '') {
   lastSync.textContent = stamp;
 }
 
-function renderAnimations(animations) {
-  const existingOptions = Array.from(animationSelect.options);
+function renderModes(modes) {
+  const existingOptions = Array.from(modeSelect.options);
   const existingMap = new Map();
   existingOptions.forEach((opt) => existingMap.set(opt.value, opt));
 
-  animations.forEach((name) => {
-    let opt = existingMap.get(name);
+  modes.forEach(({ id, name }) => {
+    let opt = existingMap.get(id);
     if (!opt) {
       opt = document.createElement('option');
-      opt.value = name;
-      opt.textContent = name;
-      animationSelect.appendChild(opt);
+      opt.value = id;
+      opt.textContent = name || id;
+      modeSelect.appendChild(opt);
     }
-    opt.selected = name === clientState.currentAnimation;
-    existingMap.delete(name);
+    opt.selected = id === clientState.currentMode;
+    existingMap.delete(id);
   });
 
-  existingMap.forEach((opt) => animationSelect.removeChild(opt));
-  animationSelect.disabled = animations.length === 0;
+  existingMap.forEach((opt) => modeSelect.removeChild(opt));
+  modeSelect.disabled = modes.length === 0;
 }
 
 function drawShelvesCanvas(shelves) {
@@ -170,16 +170,16 @@ function drawShelvesCanvas(shelves) {
 
 function applyState(next) {
   if (!next) return;
-  if (Array.isArray(next.animations)) {
-    clientState.animations = next.animations;
-    renderAnimations(next.animations);
+  if (Array.isArray(next.modes)) {
+    clientState.modes = next.modes;
+    renderModes(next.modes);
   }
   if (Array.isArray(next.shelves)) {
     clientState.shelves = next.shelves;
     drawShelvesCanvas(next.shelves);
   }
   if ('ready' in next) updateStatus(next.ready);
-  if ('currentAnimation' in next) clientState.currentAnimation = next.currentAnimation;
+  if ('currentMode' in next) clientState.currentMode = next.currentMode;
   updateLastSync();
 }
 
@@ -202,27 +202,27 @@ async function refreshState() {
   }
 }
 
-async function runAnimation() {
-  const name = animationSelect.value;
+async function runMode() {
+  const name = modeSelect.value;
   if (!name) return;
   try {
-    await fetchJson('/api/animation', {
+    await fetchJson('/api/mode', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ name }),
     });
-    clientState.currentAnimation = name;
-    showToast(`Running ${name}`);
+    clientState.currentMode = name;
+    showToast(`Mode ${name} running`);
   } catch (err) {
     showToast(`Failed to run: ${err.message}`);
   }
 }
 
-async function stopAnimation() {
+async function stopMode() {
   try {
-    await fetchJson('/api/animation/stop', { method: 'POST' });
-    clientState.currentAnimation = null;
-    showToast('Animation stopped');
+    await fetchJson('/api/mode/stop', { method: 'POST' });
+    clientState.currentMode = null;
+    showToast('Mode stopped');
   } catch (err) {
     showToast(`Stop failed: ${err.message}`);
   }
@@ -249,10 +249,11 @@ function connectSocket() {
         applyState(msg.data);
       if (msg.type === 'shelf' && msg.shelf) {
         upsertShelf(msg.shelf);
-        updateLastSync('Live via WebSocket');
+        updateLastSync('Live via WebSocket');      }
+      if (msg.type === 'mode') {
+        clientState.currentMode = msg.name || null;
+        if (modeSelect) modeSelect.value = clientState.currentMode || '';
       }
-      if (msg.type === 'animation') 
-        clientState.currentAnimation = msg.name || null;
       if (msg.type === 'ready' && 'ready' in msg) 
         updateStatus(msg.ready);
     } catch (err) {
@@ -282,7 +283,8 @@ function updateBrushUI(hex) {
   if(recentColours.indexOf(hex)>-0)
     return;
 
-  recentColours.push(hex);
+  recentColours.unshift(hex);
+  if(recentColours.length > 10) recentColours.length = 10;
   recentColoursElement.innerHTML = '';  
   recentColours.forEach(c => {
     var d = document.createElement('div');
@@ -328,7 +330,7 @@ async function paintShelfAtEvent(evt) {
   if (lastPaint.key === key && lastPaint.hex === brushHex) return;
 
   try {
-    if (clientState.currentAnimation) await stopAnimation();
+    if (clientState.currentMode) await stopMode();
     await fetchJson(`/api/shelves/${shelfRect.columnIndex}/${shelfRect.shelfIndex}/side/${shelfRect.side==0?'left':'right'}/color`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -365,8 +367,8 @@ function stopPainting() {
   painting = false;
 }
 
-runAnimationBtn.addEventListener('click', runAnimation);
-stopAnimationBtn.addEventListener('click', stopAnimation);
+runModeBtn.addEventListener('click', runMode);
+stopModeBtn.addEventListener('click', stopMode);
 allOffBtn.addEventListener('click', allOff);
 refreshBtn.addEventListener('click', refreshState);
 

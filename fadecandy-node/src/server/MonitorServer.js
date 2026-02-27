@@ -62,7 +62,7 @@ export default class MonitorServer {
       const shelf = Number(req.params.shelf);
       const { r, g, b } = req.body || {};
       try {
-        this.manager.stopAnimation();
+        this.manager.stopMode();
         this.manager.setShelfColor(column, shelf, { r, g, b });
         res.json({ ok: true, column, shelf, color: { r, g, b } });
       } catch (err) {
@@ -77,7 +77,7 @@ export default class MonitorServer {
       const side = sideRaw === 'left' ? 0 : sideRaw === 'right' ? 1 : Number(sideRaw);
       const { r, g, b } = req.body || {};
       try {
-        this.manager.stopAnimation();
+        this.manager.stopMode();
         this.manager.setShelfSideColor(column, shelf, side, { r, g, b });
         res.json({ ok: true, column, shelf, side, color: { r, g, b } });
       } catch (err) {
@@ -85,23 +85,23 @@ export default class MonitorServer {
       }
     });
 
-    this.app.post('/api/animation', (req, res) => {
+    this.app.post('/api/mode', (req, res) => {
       const { name, options = {} } = req.body || {};
       try {
-        this.manager.runAnimation(name, options);
-        res.json({ ok: true, animation: name });
+        this.manager.runMode(name, options);
+        res.json({ ok: true, mode: name });
       } catch (err) {
         res.status(400).json({ ok: false, error: err.message });
       }
     });
 
-    this.app.post('/api/animation/stop', (_req, res) => {
-      this.manager.stopAnimation();
+    this.app.post('/api/mode/stop', (_req, res) => {
+      this.manager.stopMode();
       res.json({ ok: true });
     });
 
     this.app.post('/api/off', (_req, res) => {
-      this.manager.stopAnimation();
+      this.manager.stopMode();
       this.manager.clear();
       res.json({ ok: true });
     });
@@ -118,12 +118,8 @@ export default class MonitorServer {
     if (!this.manager) return;
     this.manager.on('shelf:update', (shelf) => this.#broadcast({ type: 'shelf', shelf }));
     this.manager.on('state:update', () => this.#broadcast({ type: 'state', data: this.#buildState() }));
-    this.manager.on('animation:start', (name) =>
-      this.#broadcast({ type: 'animation', running: true, name }),
-    );
-    this.manager.on('animation:stop', () =>
-      this.#broadcast({ type: 'animation', running: false, name: null }),
-    );
+    this.manager.on('mode:start', (name) => this.#broadcast({ type: 'mode', running: true, name }));
+    this.manager.on('mode:stop', () => this.#broadcast({ type: 'mode', running: false, name: null }));
     this.manager.on('ready', () => this.#broadcast({ type: 'ready', ready: true }));
   }
 
@@ -138,9 +134,9 @@ export default class MonitorServer {
   #buildState() {
     return {
       ready: this.manager.ready,
-      currentAnimation: this.manager.currentAnimation || null,
+      currentMode: this.manager.currentMode || null,
+      modes: this.manager.listModes(),
       shelves: this.manager.listShelves(),
-      animations: this.manager.listAnimations(),
     };
   }
 }

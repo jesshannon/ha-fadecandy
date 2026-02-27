@@ -32,7 +32,7 @@ process.on('unhandledRejection', (reason) => {
 ['SIGTERM', 'SIGINT'].forEach((sig) =>
   process.on(sig, () => {
     logger.warn(`Received ${sig}, shutting down`);
-    manager?.stopAnimation();
+    manager?.stopMode();
     manager?.clear();
     process.exit(0);
   }),
