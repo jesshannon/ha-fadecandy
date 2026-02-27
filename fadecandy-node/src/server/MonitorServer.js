@@ -62,7 +62,7 @@ export default class MonitorServer {
       const shelf = Number(req.params.shelf);
       const { r, g, b } = req.body || {};
       try {
-        this.manager.stopMode();
+        if(this.manager.currentMode) this.manager.stopMode();
         this.manager.setShelfColor(column, shelf, { r, g, b });
         res.json({ ok: true, column, shelf, color: { r, g, b } });
       } catch (err) {
@@ -77,7 +77,7 @@ export default class MonitorServer {
       const side = sideRaw === 'left' ? 0 : sideRaw === 'right' ? 1 : Number(sideRaw);
       const { r, g, b } = req.body || {};
       try {
-        this.manager.stopMode();
+        if(this.manager.currentMode) this.manager.stopMode();
         this.manager.setShelfSideColor(column, shelf, side, { r, g, b });
         res.json({ ok: true, column, shelf, side, color: { r, g, b } });
       } catch (err) {

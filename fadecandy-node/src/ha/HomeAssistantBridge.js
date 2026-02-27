@@ -28,6 +28,9 @@ export default class HomeAssistantBridge {
       try {
         if(this.manager.currentMode != null) this.stopMode();
         this.manager.setShelfColor(column, shelf, { r, g, b });
+
+        this.logger?.debug?.(`Setting shelf ${column} : ${shelf} to r=${r} g=${g} b=${b}`);
+
         res.json({ ok: true, column, shelf, color: { r, g, b } });
       } catch (err) {
         this.logger?.warn?.(`HA shelf set failed: ${err.message}`);

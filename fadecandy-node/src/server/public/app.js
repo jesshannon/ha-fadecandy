@@ -29,7 +29,17 @@ let painting = false;
 let shelfRects = [];
 let lastPaint = { key: null, hex: null };
 
-let recentColours = ["#000000","#ffffff","#ff0000","#0000ff","#f200ff"];
+let recentColours = [
+ "#000000",
+ "#ffffff",
+ "#ff3b3b",
+ "#00aaff",
+ "#00ff88",
+ "#ffcc00",
+ "#ff00cc",
+ "#7a5cff",
+ "#00ffd5",
+ "#ff6a00"];
 
 async function fetchJson(url, options) {
   const res = await fetch(url, options);

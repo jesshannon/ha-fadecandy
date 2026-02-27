@@ -23,7 +23,7 @@ map:
 environment:
   NODE_ENV: production
 options:
-  log_level: info
+  log_level: debug
 schema:
   log_level: list(debug|info|warn|error)
 ports:

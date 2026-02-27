@@ -1,7 +1,12 @@
-import { EventEmitter } from 'events';
-import FadeCandy from '../fa/FadeCandy.js';
-import { BOOKSHELF_MAP, getShelfRanges, listShelves, maxPixelIndex } from '../config/bookshelfMap.js';
-import buildModes from './modes/index.js';
+import { EventEmitter } from "events";
+import FadeCandy from "../fa/FadeCandy.js";
+import {
+  BOOKSHELF_MAP,
+  getShelfRanges,
+  listShelves,
+  maxPixelIndex,
+} from "../config/bookshelfMap.js";
+import buildModes from "./modes/index.js";
 
 function clampColor(value) {
   const v = Number.isFinite(value) ? value : 0;
@@ -13,7 +18,7 @@ function normalizeColor(input) {
     const [r = 0, g = 0, b = 0] = input;
     return { r: clampColor(r), g: clampColor(g), b: clampColor(b) };
   }
-  if (typeof input === 'object' && input !== null) {
+  if (typeof input === "object" && input !== null) {
     const { r = 0, g = 0, b = 0 } = input;
     return { r: clampColor(r), g: clampColor(g), b: clampColor(b) };
   }
@@ -29,12 +34,15 @@ export default class FadeCandyManager extends EventEmitter {
     this.pixelCount = pixelCount || Math.max(512, inferredPixels);
 
     this.frame = new Uint8Array(this.pixelCount * 3);
-    this.shelfState = listShelves(mapping).reduce((acc, { columnIndex, shelfIndex, ranges }) => {
-      acc[`${columnIndex}:${shelfIndex}`] = {
-        sides: ranges.map(() => ({ r: 0, g: 0, b: 0 })),
-      };
-      return acc;
-    }, {});
+    this.shelfState = listShelves(mapping).reduce(
+      (acc, { columnIndex, shelfIndex, ranges }) => {
+        acc[`${columnIndex}:${shelfIndex}`] = {
+          sides: ranges.map(() => ({ r: 0, g: 0, b: 0 })),
+        };
+        return acc;
+      },
+      {},
+    );
 
     this.fadeCandy = new FadeCandy();
     this.ready = false;
@@ -43,23 +51,40 @@ export default class FadeCandyManager extends EventEmitter {
     this.stopMode = this.stopMode.bind(this);
 
     this.fadeCandy.on(FadeCandy.events.READY, (fc) => {
-      this.logger?.info?.('Fadecandy interface ready');
-      fc.config.set(FadeCandy.Configuration.schema.DISABLE_KEYFRAME_INTERPOLATION, 0);
+      this.logger?.info?.("Fadecandy interface ready");
+      fc.config.set(
+        FadeCandy.Configuration.schema.DISABLE_KEYFRAME_INTERPOLATION,
+        0,
+      );
       fc.clut.create();
     });
 
     this.fadeCandy.on(FadeCandy.events.COLOR_LUT_READY, () => {
       this.ready = true;
-      this.emit('ready');
-      this.logger?.info?.('Fadecandy Color LUT ready; device can accept frames');
+      this.emit("ready");
+
+      this.startPushingFrames();
+
+      this.logger?.info?.(
+        "Fadecandy Color LUT ready; device can accept frames",
+      );
     });
+  }
+
+  startPushingFrames() {
+    if(this.frameInterval)
+      clearInterval(this.frameInterval);
+    this.frameInterval = setInterval(()=>this.pushFrame(), 100);
   }
 
   async waitUntilReady(timeoutMs = 8000) {
     if (this.ready) return;
     await new Promise((resolve, reject) => {
-      const timer = setTimeout(() => reject(new Error('Fadecandy not ready in time')), timeoutMs);
-      this.once('ready', () => {
+      const timer = setTimeout(
+        () => reject(new Error("Fadecandy not ready in time")),
+        timeoutMs,
+      );
+      this.once("ready", () => {
         clearTimeout(timer);
         resolve();
       });
@@ -82,48 +107,64 @@ export default class FadeCandyManager extends EventEmitter {
       const sides = this.shelfState[key]?.sides || [];
       this.shelfState[key] = { sides: sides.map(() => ({ r: 0, g: 0, b: 0 })) };
     });
-    if (!skipSend) this.pushFrame();
-    this.emit('state:update', this.listShelves());
+    this.emit("state:update", this.listShelves());
   }
 
-  setShelfColor(columnIndex, shelfIndex, color, { flush = true, notify = true } = {}) {
+  setShelfColor(
+    columnIndex,
+    shelfIndex,
+    color,
+    { flush = true, notify = true } = {},
+  ) {
     const rgb = normalizeColor(color);
     const ranges = getShelfRanges(columnIndex, shelfIndex, this.mapping);
-    if (!ranges.length) throw new Error(`No shelf mapping for column ${columnIndex} shelf ${shelfIndex}`);
+    if (!ranges.length)
+      throw new Error(
+        `No shelf mapping for column ${columnIndex} shelf ${shelfIndex}`,
+      );
 
     ranges.forEach(([start, end]) => this.#setRangeColor(start, end, rgb));
     const state = this.shelfState[`${columnIndex}:${shelfIndex}`];
     if (state?.sides) state.sides = state.sides.map(() => rgb);
-    if (flush) this.pushFrame();
     if (notify) this.#emitShelfUpdate(columnIndex, shelfIndex);
   }
 
-  setShelfSideColor(columnIndex, shelfIndex, sideIndex, color, { flush = true } = {}) {
+  setShelfSideColor(
+    columnIndex,
+    shelfIndex,
+    sideIndex,
+    color,
+    { flush = true } = {},
+  ) {
     const rgb = normalizeColor(color);
     const ranges = getShelfRanges(columnIndex, shelfIndex, this.mapping);
     const targetRange = ranges[sideIndex];
-    if (!targetRange) throw new Error(`No side ${sideIndex} for column ${columnIndex} shelf ${shelfIndex}`);
+    if (!targetRange)
+      throw new Error(
+        `No side ${sideIndex} for column ${columnIndex} shelf ${shelfIndex}`,
+      );
 
     const [start, end] = targetRange;
     this.#setRangeColor(start, end, rgb);
     const state = this.shelfState[`${columnIndex}:${shelfIndex}`];
     if (state?.sides?.[sideIndex]) state.sides[sideIndex] = rgb;
-    if (flush) this.pushFrame();
     this.#emitShelfUpdate(columnIndex, shelfIndex);
   }
 
   setAllShelves(color, { flush = true, notify = true } = {}) {
     const rgb = normalizeColor(color);
     listShelves(this.mapping).forEach(({ columnIndex, shelfIndex }) => {
-      this.setShelfColor(columnIndex, shelfIndex, rgb, { flush: false, notify: false });
+      this.setShelfColor(columnIndex, shelfIndex, rgb, {
+        flush: false,
+        notify: false,
+      });
     });
-    if (flush) this.pushFrame();
-    if (notify) this.emit('state:update', this.listShelves());
+    if (notify) this.emit("state:update", this.listShelves());
   }
 
   pushFrame() {
     if (!this.ready) {
-      this.logger?.debug?.('Skipping pushFrame: device not ready');
+      this.logger?.debug?.("Skipping pushFrame: device not ready");
       return false;
     }
     this.fadeCandy.send(this.frame);
@@ -140,31 +181,29 @@ export default class FadeCandyManager extends EventEmitter {
   }
 
   stopMode() {
-    const hadStopper = typeof this.modeStop === 'function';
+    const hadStopper = typeof this.modeStop === "function";
     if (hadStopper) this.modeStop();
     this.modeStop = undefined;
     const wasRunning = this.currentMode;
     this.currentMode = null;
     this.clear();
     if (hadStopper || wasRunning) {
-      this.logger?.info?.('Stopped running mode');
-      this.emit('mode:stop', null);
+      this.logger?.info?.("Stopped running mode");
+      this.emit("mode:stop", null);
     }
   }
 
   runMode(name, options = {}) {
     const mode = this.modes[name];
     if (!mode) throw new Error(`Unknown mode "${name}"`);
-    if(this.currentMode != null)
-      this.stopMode();
-    else
-      this.clear();
-    
+    if (this.currentMode != null) this.stopMode();
+    else this.clear();
+
     const maybeStop = mode.start(options);
-    this.modeStop = typeof maybeStop === 'function' ? maybeStop : undefined;
+    this.modeStop = typeof maybeStop === "function" ? maybeStop : undefined;
     this.currentMode = name;
     this.logger?.info?.(`Started mode "${name}"`);
-    this.emit('mode:start', name);
+    this.emit("mode:start", name);
     return name;
   }
 
@@ -184,7 +223,7 @@ export default class FadeCandyManager extends EventEmitter {
 
   #emitShelfUpdate(columnIndex, shelfIndex) {
     const shelf = this.#buildShelfSnapshot(columnIndex, shelfIndex);
-    this.emit('shelf:update', shelf);
+    this.emit("shelf:update", shelf);
   }
 
   #combineSideColors(sides = []) {

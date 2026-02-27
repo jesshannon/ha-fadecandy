@@ -46,7 +46,7 @@ async function main() {
   const monitor = new MonitorServer({ port: PORT, manager, haBridge, logger });
 
   logFadecandyStatus(logger);
-  setInterval(() => logFadecandyStatus(logger), 30000);
+  // setInterval(() => logFadecandyStatus(logger), 30000);
 
   try {
     await monitor.start();
