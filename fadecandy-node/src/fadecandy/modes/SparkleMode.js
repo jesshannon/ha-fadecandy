@@ -1,4 +1,4 @@
-const DEFAULT_FRAME_RATE_MS = 80;
+const DEFAULT_FRAME_RATE_MS = 300;
 
 export default class SparkleMode {
   constructor(manager) {
@@ -20,7 +20,6 @@ export default class SparkleMode {
         this.manager.frame[baseIndex + 1] = 255;
         this.manager.frame[baseIndex + 2] = 255;
       }
-      this.manager.pushFrame();
     }, DEFAULT_FRAME_RATE_MS);
 
     return () => clearInterval(timer);
