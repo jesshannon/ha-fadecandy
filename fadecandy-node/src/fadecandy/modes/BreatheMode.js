@@ -7,10 +7,10 @@ export default class BreatheMode {
     this.name = 'Breathe';
   }
 
-  start({ color = { r: 40, g: 120, b: 255 }, durationMs = 2400 } = {}) {
+  start({ color = { r: 140, g: 190, b: 255 }, durationMs = 2400 } = {}) {
     let t = 0;
     const timer = setInterval(() => {
-      const phase = (Math.sin((2 * Math.PI * t) / durationMs) + 1) / 2;
+      const phase = (Math.sin((2 * Math.PI * t / 2.5) / durationMs) + 1) / 2;
       const next = {
         r: Math.round(color.r * phase),
         g: Math.round(color.g * phase),

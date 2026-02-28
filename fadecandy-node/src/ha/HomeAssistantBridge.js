@@ -26,7 +26,7 @@ export default class HomeAssistantBridge {
       const shelf = Number(req.params.shelf);
       const { r, g, b } = req.body || {};
       try {
-        if(this.manager.currentMode != null) this.stopMode();
+        if(this.manager.currentMode != null) this.manager.stopMode();
         this.manager.setShelfColor(column, shelf, { r, g, b });
 
         this.logger?.debug?.(`Setting shelf ${column} : ${shelf} to r=${r} g=${g} b=${b}`);
