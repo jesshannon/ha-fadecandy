@@ -17,13 +17,6 @@ const COLORS = [
   { r: 255, g: 140, b: 0   },  // orange
 ];
 
-function scaleColor(color, t) {
-  return {
-    r: Math.round(color.r * t),
-    g: Math.round(color.g * t),
-    b: Math.round(color.b * t),
-  };
-}
 
 function emptyRow() {
   return Array(COLS).fill(null);
@@ -37,7 +30,7 @@ export default class BlocksGame extends GameBase {
     this.activePiece = null;  // { column, y, color }
     this.score = 0;
     this.gameOver = false;
-    this.clearing = null;     // { rows, phase, timer } during flash animation
+    this.clearing = null;     // { cells, phase, timer } during flash animation
     this.fastDrop = false;
     this._timer = null;
   }
@@ -95,7 +88,7 @@ export default class BlocksGame extends GameBase {
       score: this.score,
       gameOver: this.gameOver,
       running: this.active,
-      clearing: this.clearing?.rows ?? null,
+      clearing: this.clearing?.cells ?? null,
     };
   }
 
@@ -165,10 +158,10 @@ export default class BlocksGame extends GameBase {
 
     this.board[row][column] = { color };
 
-    const clearRows = this._findClearRows();
-    if (clearRows.length > 0) {
-      this.score += clearRows.length * 100;
-      this._startClearAnimation(clearRows);
+    const matched = this._findMatchedCells();
+    if (matched.length > 0) {
+      this.score += matched.length * 33;
+      this._startClearAnimation(matched);
     } else {
       this._spawnPiece();
     }
@@ -177,35 +170,61 @@ export default class BlocksGame extends GameBase {
     this._broadcastState();
   }
 
-  _findClearRows() {
-    const clears = [];
+  _findMatchedCells() {
+    const matched = new Set();
+
+    const sameColor = (a, b) =>
+      a && b &&
+      a.color.r === b.color.r &&
+      a.color.g === b.color.g &&
+      a.color.b === b.color.b;
+
+    const check = (positions) => {
+      const cells = positions.map(([r, c]) => this.board[r]?.[c] ?? null);
+      if (cells.every(c => c !== null) && sameColor(cells[0], cells[1]) && sameColor(cells[1], cells[2])) {
+        positions.forEach(([r, c]) => matched.add(`${r},${c}`));
+      }
+    };
+
     for (let row = 0; row < ROWS; row++) {
-      const cells = this.board[row];
-      if (!cells.every(c => c !== null)) continue;
-      const { r, g, b } = cells[0].color;
-      if (cells.every(c => c.color.r === r && c.color.g === g && c.color.b === b)) {
-        clears.push(row);
+      for (let col = 0; col < COLS; col++) {
+        if (col + 2 < COLS) check([[row, col], [row, col + 1], [row, col + 2]]);          // horizontal
+        if (row + 2 < ROWS) check([[row, col], [row + 1, col], [row + 2, col]]);          // vertical
+        if (row + 2 < ROWS && col + 2 < COLS) check([[row, col], [row + 1, col + 1], [row + 2, col + 2]]); // diagonal \
+        if (row + 2 < ROWS && col - 2 >= 0)   check([[row, col], [row + 1, col - 1], [row + 2, col - 2]]); // diagonal /
       }
     }
-    return clears;
+
+    return [...matched].map(k => {
+      const [r, c] = k.split(',').map(Number);
+      return { row: r, col: c };
+    });
   }
 
   // ── clear animation ───────────────────────────────────────────────────────
 
-  _startClearAnimation(rows) {
-    this.clearing = { rows, phase: 0, timer: null };
+  _startClearAnimation(cells) {
+    this.clearing = { cells, phase: 0, timer: null };
     this._doFlashPhase();
   }
 
   _doFlashPhase() {
     if (!this.clearing) return;
-    const { rows, phase } = this.clearing;
+    const { cells, phase } = this.clearing;
 
     if (phase >= FLASH_PHASES) {
-      // Remove cleared rows (highest index first to keep indices valid)
-      for (const row of [...rows].sort((a, b) => b - a)) {
-        this.board.splice(row, 1);
-        this.board.unshift(emptyRow());
+      // Clear matched cells then apply per-column gravity
+      for (const { row, col } of cells) {
+        this.board[row][col] = null;
+      }
+      for (let col = 0; col < COLS; col++) {
+        const remaining = [];
+        for (let row = 0; row < ROWS; row++) {
+          if (this.board[row][col] !== null) remaining.push(this.board[row][col]);
+        }
+        for (let row = ROWS - 1; row >= 0; row--) {
+          this.board[row][col] = remaining.length > 0 ? remaining.pop() : null;
+        }
       }
       this.clearing = null;
       this._spawnPiece();
@@ -214,12 +233,10 @@ export default class BlocksGame extends GameBase {
       return;
     }
 
-    // Alternate white / black for flash effect
+    // Alternate white / black for flash effect on matched cells only
     const flashColor = phase % 2 === 0 ? { r: 255, g: 255, b: 255 } : { r: 0, g: 0, b: 0 };
-    for (const row of rows) {
-      for (let col = 0; col < COLS; col++) {
-        this.manager.setShelfColor(col, row, flashColor, { notify: false });
-      }
+    for (const { row, col } of cells) {
+      this.manager.setShelfColor(col, row, flashColor, { notify: false });
     }
 
     this.clearing.phase++;
@@ -252,20 +269,17 @@ export default class BlocksGame extends GameBase {
       }
     }
 
-    // Active piece: smooth blend between two shelves when in transit
+    // Active piece: split across two shelves using LED count instead of brightness.
+    // Upper shelf (row0): bottom (1-frac) fraction lit — block is exiting downward.
+    // Lower shelf (row1): top frac fraction lit — block is entering from above.
     if (this.activePiece) {
       const { column, y, color } = this.activePiece;
-      const frac = y - Math.floor(y);
       const row0 = Math.floor(y);
-
-      if (frac < 0.02) {
-        this.manager.setShelfColor(column, row0, color, { notify: false });
-      } else {
-        this.manager.setShelfColor(column, row0, scaleColor(color, 1 - frac), { notify: false });
-        const row1 = row0 + 1;
-        if (row1 < ROWS) {
-          this.manager.setShelfColor(column, row1, scaleColor(color, frac), { notify: false });
-        }
+      const frac = y - row0;
+      this.manager.setShelfColorFraction(column, row0, color, -(1 - frac), { notify: false });
+      const row1 = row0 + 1;
+      if (row1 < ROWS) {
+        this.manager.setShelfColorFraction(column, row1, color, frac, { notify: false });
       }
     }
   }

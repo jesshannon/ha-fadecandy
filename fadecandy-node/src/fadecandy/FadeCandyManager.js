@@ -151,6 +151,48 @@ export default class FadeCandyManager extends EventEmitter {
     this.#emitShelfUpdate(columnIndex, shelfIndex);
   }
 
+  /**
+   * Light a fraction of a shelf's LEDs from one end.
+   *   +fraction → lights from the high-index end downward (physically top of shelf)
+   *   -fraction → lights from the low-index end upward  (physically bottom of shelf)
+   * magnitude=0 → nothing lit; magnitude=1 → full shelf (same as setShelfColor).
+   * Backwards-compatible: other code can keep using setShelfColor for full shelves.
+   */
+  setShelfColorFraction(columnIndex, shelfIndex, color, fraction, { notify = true } = {}) {
+    const rgb = normalizeColor(color);
+    const ranges = getShelfRanges(columnIndex, shelfIndex, this.mapping);
+    if (!ranges.length)
+      throw new Error(
+        `No shelf mapping for column ${columnIndex} shelf ${shelfIndex}`,
+      );
+
+    const fromTop = fraction >= 0;
+    const magnitude = Math.min(1, Math.abs(fraction));
+    for (const [start, end] of ranges) {
+      const n = end - start + 1;
+      // ceil so even a tiny fraction lights at least 1 LED (when magnitude > 0)
+      const litCount = magnitude > 0 ? Math.ceil(n * magnitude) : 0;
+      const litStart = fromTop ? end - litCount + 1 : start;
+      const litEnd   = fromTop ? end                : start + litCount - 1;
+      for (let idx = start; idx <= end; idx++) {
+        const base = idx * 3;
+        if (litCount > 0 && idx >= litStart && idx <= litEnd) {
+          this.frame[base]     = rgb.r;
+          this.frame[base + 1] = rgb.g;
+          this.frame[base + 2] = rgb.b;
+        } else {
+          this.frame[base]     = 0;
+          this.frame[base + 1] = 0;
+          this.frame[base + 2] = 0;
+        }
+      }
+    }
+
+    const state = this.shelfState[`${columnIndex}:${shelfIndex}`];
+    if (state?.sides) state.sides = state.sides.map(() => rgb);
+    if (notify) this.#emitShelfUpdate(columnIndex, shelfIndex);
+  }
+
   setAllShelves(color, { flush = true, notify = true } = {}) {
     const rgb = normalizeColor(color);
     listShelves(this.mapping).forEach(({ columnIndex, shelfIndex }) => {
