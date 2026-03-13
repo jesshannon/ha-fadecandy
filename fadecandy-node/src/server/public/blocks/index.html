@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
+  <title>Bookshelf Blocks</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/blocks/styles.css">
+</head>
+<body>
+  <header>
+    <a href="/" class="back-link">← Lab</a>
+    <h1>Blocks</h1>
+    <div id="score-display">0</div>
+  </header>
+
+  <div id="game-wrap">
+    <!-- Visual bookshelf grid: 3 cols × 6 rows, rendered by JS -->
+    <div id="game-grid"></div>
+
+    <!-- Overlay shown when game is not running -->
+    <div id="game-overlay" class="overlay">
+      <div id="overlay-message"></div>
+      <button id="btn-start" class="primary-btn">Start Game</button>
+    </div>
+  </div>
+
+  <div id="controls">
+    <button id="btn-left"  class="ctrl-btn" aria-label="Move left">◀</button>
+    <button id="btn-down"  class="ctrl-btn" aria-label="Drop faster">▼</button>
+    <button id="btn-right" class="ctrl-btn" aria-label="Move right">▶</button>
+  </div>
+
+  <div id="action-bar">
+    <button id="btn-stop" class="ghost-btn">Stop Game</button>
+  </div>
+
+  <div id="toast" class="toast hidden"></div>
+
+  <script src="/blocks/app.js"></script>
+</body>
+</html>

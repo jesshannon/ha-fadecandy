@@ -2,6 +2,8 @@ import winston from 'winston';
 import FadeCandyManager from './fadecandy/FadeCandyManager.js';
 import HomeAssistantBridge from './ha/HomeAssistantBridge.js';
 import MonitorServer from './server/MonitorServer.js';
+import GameServer from './server/GameServer.js';
+import BlocksGame from './games/blocks/BlocksGame.js';
 import { logFadecandyStatus } from './usbUtils.js';
 
 const logger = winston.createLogger({
@@ -43,7 +45,11 @@ async function main() {
 
   manager = new FadeCandyManager({ logger });
   const haBridge = new HomeAssistantBridge({ manager, logger });
-  const monitor = new MonitorServer({ port: PORT, manager, haBridge, logger });
+
+  const gameServer = new GameServer({ logger });
+  gameServer.registerGame('blocks', new BlocksGame(manager, logger));
+
+  const monitor = new MonitorServer({ port: PORT, manager, haBridge, gameServer, logger });
 
   logFadecandyStatus(logger);
   // setInterval(() => logFadecandyStatus(logger), 30000);

@@ -7,10 +7,11 @@ import { listUsb } from '../usbUtils.js';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 export default class MonitorServer {
-  constructor({ port = 7890, manager, haBridge, logger }) {
+  constructor({ port = 7890, manager, haBridge, gameServer, logger }) {
     this.port = port;
     this.manager = manager;
     this.logger = logger;
+    this.gameServer = gameServer;
     this.app = express();
     this.server = null;
     this.wss = null;
@@ -19,6 +20,7 @@ export default class MonitorServer {
     this.#registerApiRoutes();
     this.#registerManagerEvents();
     if (haBridge) haBridge.attach(this.app);
+    if (gameServer) gameServer.attach(this.app);
 
     const publicDir = path.join(__dirname, 'public');
     this.app.use(express.static(publicDir));
@@ -112,6 +114,7 @@ export default class MonitorServer {
     this.wss.on('connection', (socket) => {
       socket.send(JSON.stringify({ type: 'state', data: this.#buildState() }));
     });
+    this.gameServer?.attachWebSocket(this.wss);
   }
 
   #registerManagerEvents() {

@@ -39,7 +39,6 @@ export default class RainbowColumnsMode {
           this.manager.setShelfColor(col, shelf, rgb, { flush: false });
         }
       }
-      this.manager.pushFrame();
       hue = (hue + speed / 10) % 360;
     }, DEFAULT_FRAME_RATE_MS);
 
